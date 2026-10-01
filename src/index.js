@@ -1,3 +1,5 @@
+const http = require("http");
+
 const {
   Client,
   GatewayIntentBits,
@@ -23,6 +25,49 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
+// ==========================================
+// RENDER HEALTH SERVER
+// ==========================================
+
+const PORT = process.env.PORT || 3000;
+
+const server = http.createServer((req, res) => {
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+    });
+
+    res.end(
+      JSON.stringify({
+        status: "online",
+        service: "Deorbit AI",
+        version: "1.0.0",
+        discord: client.isReady() ? "connected" : "connecting",
+      })
+    );
+
+    return;
+  }
+
+  res.writeHead(404, {
+    "Content-Type": "application/json",
+  });
+
+  res.end(
+    JSON.stringify({
+      error: "Not found",
+    })
+  );
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Deorbit health server listening on port ${PORT}`);
+});
+
+// ==========================================
+// DISCORD COMMAND REGISTRATION
+// ==========================================
+
 async function registerCommands() {
   const commands = loadCommands();
 
@@ -44,6 +89,10 @@ async function registerCommands() {
   );
 }
 
+// ==========================================
+// DISCORD READY
+// ==========================================
+
 client.once("clientReady", async () => {
   console.log(`Deorbit is online as ${client.user.tag}`);
 
@@ -57,14 +106,26 @@ client.once("clientReady", async () => {
   }
 });
 
+// ==========================================
+// INTERACTIONS
+// ==========================================
+
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand()) {
+    return;
+  }
 
   try {
     const handled = await handleCommand(interaction, {});
 
-    if (!handled && !interaction.replied && !interaction.deferred) {
-      await interaction.reply("Unknown Deorbit command.");
+    if (
+      !handled &&
+      !interaction.replied &&
+      !interaction.deferred
+    ) {
+      await interaction.reply(
+        "Unknown Deorbit command."
+      );
     }
   } catch (error) {
     console.error("Interaction error:", error);
@@ -79,5 +140,9 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 });
+
+// ==========================================
+// START DISCORD
+// ==========================================
 
 client.login(discordToken);
