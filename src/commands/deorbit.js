@@ -34,6 +34,11 @@ const {
   formatControlFlow,
 } = require("../controlflow");
 
+const {
+  analyzeRoblox,
+  formatRobloxAnalysis,
+} = require("../roblox");
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("deorbit")
@@ -123,6 +128,7 @@ module.exports = {
         const metrics = calculateMetrics(code);
         const tokens = analyzeTokens(code);
         const controlFlow = analyzeControlFlow(code);
+        const roblox = analyzeRoblox(code);
 
         await interaction.editReply(
           [
@@ -151,6 +157,11 @@ module.exports = {
             "**Control Flow**",
             "```text",
             formatControlFlow(controlFlow),
+            "```",
+            "",
+            "**Roblox Analysis**",
+            "```text",
+            formatRobloxAnalysis(roblox),
             "```",
             "",
             `**Functions:** ${
