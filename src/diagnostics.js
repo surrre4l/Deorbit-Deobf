@@ -8,6 +8,14 @@ function diagnoseLua(code) {
 
   let blockDepth = 0;
 
+  const addIssue = (line, type, message) => {
+    issues.push({
+      line,
+      type,
+      message,
+    });
+  };
+
   lines.forEach((rawLine, index) => {
     const lineNumber = index + 1;
     const line = rawLine.trim();
@@ -16,71 +24,123 @@ function diagnoseLua(code) {
       return;
     }
 
-    // Basic block tracking.
-    const opens = (
-      line.match(
-        /\b(function|if|for|while|repeat|do)\b/g
-      ) || []
-    ).length;
+    // Basic block tracking
+    const openMatches =
+      line.match(/\b(function|if|for|while|do|repeat)\b/g) || [];
 
-    const closes = (
-      line.match(/\bend\b/g) || []
-    ).length;
+    const closeMatches =
+      line.match(/\bend\b/g) || [];
 
-    blockDepth += opens - closes;
+    blockDepth += openMatches.length;
+    blockDepth -= closeMatches.length;
 
     if (blockDepth < 0) {
-      issues.push({
-        line: lineNumber,
-        type: "block",
-        message: "Unexpected 'end'.",
-      });
+      addIssue(
+        lineNumber,
+        "block",
+        "Unexpected 'end'."
+      );
 
       blockDepth = 0;
     }
 
-    // Common assignment mistake.
+    // if statement checks
     if (
       /\bif\b/.test(line) &&
-      /\bthen\b/.test(line) === false &&
+      !/\bthen\b/.test(line) &&
       !line.includes("--")
     ) {
-      issues.push({
-        line: lineNumber,
-        type: "syntax",
-        message: "An if statement may be missing 'then'.",
-      });
+      addIssue(
+        lineNumber,
+        "syntax",
+        "An if statement may be missing 'then'."
+      );
     }
 
-    // Suspicious empty function declaration.
+    // elseif checks
+    if (
+      /\belseif\b/.test(line) &&
+      !/\bthen\b/.test(line)
+    ) {
+      addIssue(
+        lineNumber,
+        "syntax",
+        "An elseif statement may be missing 'then'."
+      );
+    }
+
+    // Function declaration checks
     if (
       /^function\s+[A-Za-z_][A-Za-z0-9_.:]*\s*\([^)]*\)\s*$/.test(line)
     ) {
-      issues.push({
-        line: lineNumber,
-        type: "syntax",
-        message: "Function declaration has no visible body.",
-      });
+      addIssue(
+        lineNumber,
+        "syntax",
+        "Function declaration has no visible body."
+      );
     }
 
-    // Suspicious local declaration.
+    // Empty local declaration
     if (
       /^local\s+[A-Za-z_][A-Za-z0-9_]*\s*$/.test(line)
     ) {
-      issues.push({
-        line: lineNumber,
-        type: "style",
-        message: "Local variable is declared without an assignment.",
-      });
+      addIssue(
+        lineNumber,
+        "style",
+        "Local variable is declared without an assignment."
+      );
+    }
+
+    // Assignment to obvious Lua keywords
+    if (
+      /^(end|then|else|elseif|return|local|function|while|for|repeat)\s*=/.test(
+        line
+      )
+    ) {
+      addIssue(
+        lineNumber,
+        "syntax",
+        "A Lua keyword appears to be used as an assignment target."
+      );
+    }
+
+    // Empty function call
+    if (
+      /\b[A-Za-z_][A-Za-z0-9_.:]*\(\s*\)\s*$/.test(line) &&
+      !line.startsWith("function")
+    ) {
+      addIssue(
+        lineNumber,
+        "info",
+        "Function call has no arguments; verify that this is intentional."
+      );
+    }
+
+    // Suspicious loadstring usage
+    if (/\bloadstring\s*\(/.test(line)) {
+      addIssue(
+        lineNumber,
+        "dynamic",
+        "Dynamic Lua loading detected; inspect the source before execution."
+      );
+    }
+
+    // Deprecated Roblox API pattern
+    if (/\bwait\s*\(/.test(line)) {
+      addIssue(
+        lineNumber,
+        "roblox",
+        "Legacy wait() usage detected; task.wait() may be preferable."
+      );
     }
   });
 
   if (blockDepth > 0) {
-    issues.push({
-      line: lines.length,
-      type: "block",
-      message: `${blockDepth} block(s) may be missing 'end'.`,
-    });
+    addIssue(
+      lines.length,
+      "block",
+      `${blockDepth} block(s) may be missing 'end'.`
+    );
   }
 
   return issues;
