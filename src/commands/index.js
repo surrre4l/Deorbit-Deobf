@@ -1,25 +1,44 @@
-const fs = require("fs");
-const path = require("path");
+const {
+  Client,
+  GatewayIntentBits,
+} = require("discord.js");
 
-function loadCommands() {
-  const commands = new Map();
-  const commandsPath = __dirname;
+const {
+  discordToken,
+} = require("./config");
 
-  for (const file of fs.readdirSync(commandsPath)) {
-    if (!file.endsWith(".js") || file === "index.js") {
-      continue;
+const {
+  handleCommand,
+} = require("./commands/router");
+
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds],
+});
+
+client.once("clientReady", () => {
+  console.log(`Deorbit is online as ${client.user.tag}`);
+});
+
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  try {
+    const handled = await handleCommand(interaction, {});
+
+    if (!handled && !interaction.replied && !interaction.deferred) {
+      await interaction.reply("Unknown Deorbit command.");
     }
+  } catch (error) {
+    console.error("Interaction error:", error);
 
-    const command = require(path.join(commandsPath, file));
+    const message = "❌ Something went wrong while processing Deorbit.";
 
-    if (command?.data?.name && typeof command.execute === "function") {
-      commands.set(command.data.name, command);
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply(message);
+    } else {
+      await interaction.reply(message);
     }
   }
+});
 
-  return commands;
-}
-
-module.exports = {
-  loadCommands,
-};
+client.login(discordToken);
