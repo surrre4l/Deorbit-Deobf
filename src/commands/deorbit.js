@@ -1,5 +1,9 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { analyzeLua, formatAnalysis } = require("../analyzer");
+const {
+  suggestNames,
+  formatRenameSuggestions,
+} = require("../rename");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -72,7 +76,6 @@ module.exports = {
 
       try {
         const result = analyzeLua(code);
-
         const output = formatAnalysis(result);
 
         await interaction.editReply(
@@ -108,9 +111,33 @@ module.exports = {
     }
 
     if (subcommand === "rename") {
-      await interaction.reply(
-        "🌑 The rename engine will be connected next."
-      );
+      const code = interaction.options.getString("code");
+
+      await interaction.deferReply();
+
+      try {
+        const suggestions = suggestNames(code);
+        const output = formatRenameSuggestions(suggestions);
+
+        await interaction.editReply(
+          [
+            "🌑 **Deorbit Rename Analysis**",
+            "",
+            "```text",
+            output,
+            "```",
+            "",
+            `**Suggestions:** ${suggestions.length}`,
+          ].join("\n")
+        );
+      } catch (error) {
+        console.error(error);
+
+        await interaction.editReply(
+          `❌ Rename analysis failed: ${error.message}`
+        );
+      }
+
       return;
     }
 
