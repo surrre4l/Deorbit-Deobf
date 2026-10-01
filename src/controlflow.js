@@ -1,67 +1,158 @@
-function analyzeControlFlow(code) {
-  if (typeof code !== "string" || !code.trim()) {
-    throw new Error("Lua code is required.");
+const {
+  OPCODES,
+} = require("./bytecode/opcodes");
+
+function getJumpTarget(
+  instruction,
+  programCounter
+) {
+  if (
+    !instruction ||
+    typeof instruction.sbx !== "number"
+  ) {
+    return null;
   }
 
-  const count = (pattern) => {
-    return (code.match(pattern) || []).length;
-  };
-
-  const result = {
-    ifStatements: count(/\bif\b/g),
-    elseifStatements: count(/\belseif\b/g),
-    elseStatements: count(/\belse\b/g),
-    forLoops: count(/\bfor\b/g),
-    whileLoops: count(/\bwhile\b/g),
-    repeatLoops: count(/\brepeat\b/g),
-    functions: count(/\bfunction\b/g),
-    returns: count(/\breturn\b/g),
-    breaks: count(/\bbreak\b/g),
-    continues: count(/\bcontinue\b/g),
-    protectedCalls: count(/\bpcall\s*\(/g),
-    coroutines: count(/\bcoroutine\./g),
-  };
-
-  result.branches =
-    result.ifStatements +
-    result.elseifStatements +
-    result.elseStatements;
-
-  result.loops =
-    result.forLoops +
-    result.whileLoops +
-    result.repeatLoops;
-
-  result.controlFlowScore =
-    result.branches +
-    result.loops +
-    result.functions +
-    result.protectedCalls;
-
-  return result;
+  return (
+    programCounter +
+    1 +
+    instruction.sbx
+  );
 }
 
-function formatControlFlow(result) {
-  return [
-    `If statements: ${result.ifStatements}`,
-    `Elseif statements: ${result.elseifStatements}`,
-    `Else statements: ${result.elseStatements}`,
-    `For loops: ${result.forLoops}`,
-    `While loops: ${result.whileLoops}`,
-    `Repeat loops: ${result.repeatLoops}`,
-    `Functions: ${result.functions}`,
-    `Returns: ${result.returns}`,
-    `Breaks: ${result.breaks}`,
-    `Continues: ${result.continues}`,
-    `Protected calls: ${result.protectedCalls}`,
-    `Coroutines: ${result.coroutines}`,
-    `Branches: ${result.branches}`,
-    `Loops: ${result.loops}`,
-    `Control-flow score: ${result.controlFlowScore}`,
-  ].join("\n");
+function collectJumpTargets(
+  instructions
+) {
+  if (!Array.isArray(instructions)) {
+    throw new TypeError(
+      "Instructions must be an array."
+    );
+  }
+
+  const targets = new Set();
+
+  for (
+    let index = 0;
+    index < instructions.length;
+    index++
+  ) {
+    const instruction =
+      instructions[index];
+
+    if (
+      instruction.opcode === OPCODES.JMP ||
+      instruction.opcode === OPCODES.FORPREP ||
+      instruction.opcode === OPCODES.FORLOOP
+    ) {
+      const target =
+        getJumpTarget(
+          instruction,
+          index
+        );
+
+      if (
+        target !== null &&
+        target >= 0 &&
+        target < instructions.length
+      ) {
+        targets.add(target);
+      }
+    }
+  }
+
+  return [...targets].sort(
+    (a, b) => a - b
+  );
+}
+
+function findBlockBoundaries(
+  instructions
+) {
+  if (!Array.isArray(instructions)) {
+    throw new TypeError(
+      "Instructions must be an array."
+    );
+  }
+
+  const boundaries =
+    new Set([0]);
+
+  const jumpTargets =
+    collectJumpTargets(
+      instructions
+    );
+
+  for (const target of jumpTargets) {
+    boundaries.add(target);
+  }
+
+  for (
+    let index = 0;
+    index < instructions.length;
+    index++
+  ) {
+    const opcode =
+      instructions[index].opcode;
+
+    if (
+      opcode === OPCODES.JMP ||
+      opcode === OPCODES.RETURN ||
+      opcode === OPCODES.TAILCALL
+    ) {
+      if (
+        index + 1 <
+        instructions.length
+      ) {
+        boundaries.add(index + 1);
+      }
+    }
+  }
+
+  return [...boundaries].sort(
+    (a, b) => a - b
+  );
+}
+
+function buildBasicBlocks(
+  instructions
+) {
+  const boundaries =
+    findBlockBoundaries(
+      instructions
+    );
+
+  const blocks = [];
+
+  for (
+    let index = 0;
+    index < boundaries.length;
+    index++
+  ) {
+    const start =
+      boundaries[index];
+
+    const next =
+      boundaries[index + 1] ??
+      instructions.length;
+
+    blocks.push({
+      id: blocks.length,
+      start,
+      end: next - 1,
+      instructions:
+        instructions.slice(
+          start,
+          next
+        ),
+    });
+  }
+
+  return blocks;
 }
 
 module.exports = {
-  analyzeControlFlow,
-  formatControlFlow,
+  getJumpTarget,
+  collectJumpTargets,
+  findBlockBoundaries,
+  buildBasicBlocks,
 };
