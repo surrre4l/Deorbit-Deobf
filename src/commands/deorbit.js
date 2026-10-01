@@ -39,6 +39,11 @@ const {
   formatRobloxAnalysis,
 } = require("../roblox");
 
+const {
+  analyzePatterns,
+  formatPatternAnalysis,
+} = require("../patterns");
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("deorbit")
@@ -129,6 +134,7 @@ module.exports = {
         const tokens = analyzeTokens(code);
         const controlFlow = analyzeControlFlow(code);
         const roblox = analyzeRoblox(code);
+        const patterns = analyzePatterns(code);
 
         await interaction.editReply(
           [
@@ -164,6 +170,11 @@ module.exports = {
             formatRobloxAnalysis(roblox),
             "```",
             "",
+            "**Pattern Analysis**",
+            "```text",
+            formatPatternAnalysis(patterns),
+            "```",
+            "",
             `**Functions:** ${
               result.functions.length
                 ? result.functions.join(", ")
@@ -177,6 +188,7 @@ module.exports = {
             }`,
             "",
             `**Issues:** ${diagnostics.length}`,
+            `**Notable patterns:** ${patterns.length}`,
           ].join("\n")
         );
       } catch (error) {
