@@ -1,4 +1,7 @@
-const { SlashCommandBuilder } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  AttachmentBuilder,
+} = require("discord.js");
 
 const {
   analyzeLua,
@@ -44,6 +47,97 @@ const {
   formatPatternAnalysis,
 } = require("../patterns");
 
+async function downloadAttachment(url) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to download attachment: HTTP ${response.status}`
+    );
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function getOutputName(originalName) {
+  const baseName = originalName
+    .replace(/\.(lua|txt)$/i, "")
+    .replace(/[^\w.-]+/g, "_");
+
+  return `${baseName}_DEOBFUSCATED.TXT`;
+}
+
+function buildAnalysisFile(code, originalName) {
+  const result = analyzeLua(code);
+  const diagnostics = diagnoseLua(code);
+  const metrics = calculateMetrics(code);
+  const tokens = analyzeTokens(code);
+  const controlFlow = analyzeControlFlow(code);
+  const roblox = analyzeRoblox(code);
+  const patterns = analyzePatterns(code);
+  const renameSuggestions = suggestNames(code);
+
+  // Static-analysis output.
+  // This does not execute or bypass protected code.
+  const formattedCode = formatLua(code);
+
+  return [
+    `DEORBIT ANALYSIS`,
+    `================`,
+    ``,
+    `Source: ${originalName}`,
+    `Generated: ${new Date().toISOString()}`,
+    ``,
+
+    `STRUCTURE`,
+    `---------`,
+    formatAnalysis(result),
+    ``,
+
+    `DIAGNOSTICS`,
+    `-----------`,
+    formatDiagnostics(diagnostics),
+    ``,
+
+    `METRICS`,
+    `-------`,
+    formatMetrics(metrics),
+    ``,
+
+    `TOKENS`,
+    `------`,
+    formatTokenAnalysis(tokens),
+    ``,
+
+    `CONTROL FLOW`,
+    `------------`,
+    formatControlFlow(controlFlow),
+    ``,
+
+    `ROBLOX ANALYSIS`,
+    `---------------`,
+    formatRobloxAnalysis(roblox),
+    ``,
+
+    `PATTERN ANALYSIS`,
+    `----------------`,
+    formatPatternAnalysis(patterns),
+    ``,
+
+    `RENAME SUGGESTIONS`,
+    `------------------`,
+    formatRenameSuggestions(renameSuggestions),
+    ``,
+
+    `FORMATTED LUA`,
+    `-------------`,
+    formattedCode,
+    ``,
+
+    `END OF DEORBIT REPORT`,
+  ].join("\n");
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("deorbit")
@@ -52,12 +146,18 @@ module.exports = {
     .addSubcommand((subcommand) =>
       subcommand
         .setName("deobf")
-        .setDescription("Analyze authorized Lua code")
+        .setDescription("Analyze an authorized Lua file or code")
         .addStringOption((option) =>
           option
             .setName("code")
             .setDescription("Lua code to analyze")
-            .setRequired(true)
+            .setRequired(false)
+        )
+        .addAttachmentOption((option) =>
+          option
+            .setName("file")
+            .setDescription("Upload a .lua or .txt Lua file")
+            .setRequired(false)
         )
     )
 
@@ -111,11 +211,14 @@ module.exports = {
         [
           "🌑 **Deorbit AI**",
           "",
-          "`/deorbit deobf` — Analyze Lua code",
+          "`/deorbit deobf` — Analyze Lua code or upload a file",
           "`/deorbit rename` — Suggest readable names",
           "`/deorbit format` — Format Lua code",
           "`/deorbit interactlunae` — Interact with Lunae",
           "`/deorbit help` — Show this help",
+          "",
+          "**Supported files:** `.lua`, `.txt`",
+          "**Output:** `NAME_DEOBFUSCATED.TXT`",
         ].join("\n")
       );
 
@@ -124,73 +227,84 @@ module.exports = {
 
     if (subcommand === "deobf") {
       const code = interaction.options.getString("code");
+      const file = interaction.options.getAttachment("file");
+
+      if (!code && !file) {
+        await interaction.reply(
+          "❌ Provide Lua code or upload a `.lua`/`.txt` file."
+        );
+
+        return;
+      }
+
+      if (code && file) {
+        await interaction.reply(
+          "❌ Provide either code or a file, not both."
+        );
+
+        return;
+      }
 
       await interaction.deferReply();
 
       try {
-        const result = analyzeLua(code);
-        const diagnostics = diagnoseLua(code);
-        const metrics = calculateMetrics(code);
-        const tokens = analyzeTokens(code);
-        const controlFlow = analyzeControlFlow(code);
-        const roblox = analyzeRoblox(code);
-        const patterns = analyzePatterns(code);
+        let sourceCode;
+        let sourceName;
 
-        await interaction.editReply(
-          [
-            "🌑 **Deorbit Analysis**",
-            "",
-            "**Structure**",
-            "```text",
-            formatAnalysis(result),
-            "```",
-            "",
-            "**Diagnostics**",
-            "```text",
-            formatDiagnostics(diagnostics),
-            "```",
-            "",
-            "**Metrics**",
-            "```text",
-            formatMetrics(metrics),
-            "```",
-            "",
-            "**Tokens**",
-            "```text",
-            formatTokenAnalysis(tokens),
-            "```",
-            "",
-            "**Control Flow**",
-            "```text",
-            formatControlFlow(controlFlow),
-            "```",
-            "",
-            "**Roblox Analysis**",
-            "```text",
-            formatRobloxAnalysis(roblox),
-            "```",
-            "",
-            "**Pattern Analysis**",
-            "```text",
-            formatPatternAnalysis(patterns),
-            "```",
-            "",
-            `**Functions:** ${
-              result.functions.length
-                ? result.functions.join(", ")
-                : "None detected"
-            }`,
-            "",
-            `**Services:** ${
-              result.services.length
-                ? result.services.join(", ")
-                : "None detected"
-            }`,
-            "",
-            `**Issues:** ${diagnostics.length}`,
-            `**Notable patterns:** ${patterns.length}`,
-          ].join("\n")
+        if (file) {
+          const extension = file.name
+            .split(".")
+            .pop()
+            ?.toLowerCase();
+
+          if (extension !== "lua" && extension !== "txt") {
+            await interaction.editReply(
+              "❌ Only `.lua` and `.txt` files are supported."
+            );
+
+            return;
+          }
+
+          sourceCode = (
+            await downloadAttachment(file.url)
+          ).toString("utf8");
+
+          sourceName = file.name;
+        } else {
+          sourceCode = code;
+          sourceName = "code_input.lua";
+        }
+
+        if (!sourceCode.trim()) {
+          await interaction.editReply(
+            "❌ The supplied Lua source is empty."
+          );
+
+          return;
+        }
+
+        const report = buildAnalysisFile(
+          sourceCode,
+          sourceName
         );
+
+        const outputName = getOutputName(sourceName);
+
+        const attachment = new AttachmentBuilder(
+          Buffer.from(report, "utf8"),
+          {
+            name: outputName,
+            description:
+              "Deorbit static Lua analysis report",
+          }
+        );
+
+        await interaction.editReply({
+          content:
+            `🌑 **Deorbit finished analyzing \`${sourceName}\`.**\n` +
+            `📄 Output: \`${outputName}\``,
+          files: [attachment],
+        });
       } catch (error) {
         console.error(error);
 
