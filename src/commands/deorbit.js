@@ -24,6 +24,11 @@ const {
   formatMetrics,
 } = require("../metrics");
 
+const {
+  analyzeTokens,
+  formatTokenAnalysis,
+} = require("../tokens");
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("deorbit")
@@ -86,10 +91,6 @@ module.exports = {
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
-    // ==========================================
-    // HELP
-    // ==========================================
-
     if (subcommand === "help") {
       await interaction.reply(
         [
@@ -106,10 +107,6 @@ module.exports = {
       return;
     }
 
-    // ==========================================
-    // DEOBF / ANALYSIS
-    // ==========================================
-
     if (subcommand === "deobf") {
       const code = interaction.options.getString("code");
 
@@ -119,15 +116,7 @@ module.exports = {
         const result = analyzeLua(code);
         const diagnostics = diagnoseLua(code);
         const metrics = calculateMetrics(code);
-
-        const analysisOutput =
-          formatAnalysis(result);
-
-        const diagnosticOutput =
-          formatDiagnostics(diagnostics);
-
-        const metricsOutput =
-          formatMetrics(metrics);
+        const tokens = analyzeTokens(code);
 
         await interaction.editReply(
           [
@@ -135,17 +124,22 @@ module.exports = {
             "",
             "**Structure**",
             "```text",
-            analysisOutput,
+            formatAnalysis(result),
             "```",
             "",
             "**Diagnostics**",
             "```text",
-            diagnosticOutput,
+            formatDiagnostics(diagnostics),
             "```",
             "",
             "**Metrics**",
             "```text",
-            metricsOutput,
+            formatMetrics(metrics),
+            "```",
+            "",
+            "**Tokens**",
+            "```text",
+            formatTokenAnalysis(tokens),
             "```",
             "",
             `**Functions:** ${
@@ -174,10 +168,6 @@ module.exports = {
       return;
     }
 
-    // ==========================================
-    // RENAME
-    // ==========================================
-
     if (subcommand === "rename") {
       const code = interaction.options.getString("code");
 
@@ -186,15 +176,12 @@ module.exports = {
       try {
         const suggestions = suggestNames(code);
 
-        const output =
-          formatRenameSuggestions(suggestions);
-
         await interaction.editReply(
           [
             "🌑 **Deorbit Rename Analysis**",
             "",
             "```text",
-            output,
+            formatRenameSuggestions(suggestions),
             "```",
             "",
             `**Suggestions:** ${suggestions.length}`,
@@ -211,10 +198,6 @@ module.exports = {
       return;
     }
 
-    // ==========================================
-    // FORMAT
-    // ==========================================
-
     if (subcommand === "format") {
       const code = interaction.options.getString("code");
 
@@ -222,15 +205,11 @@ module.exports = {
 
       try {
         const formatted = formatLua(code);
-
         const maxLength = 1800;
 
         const output =
           formatted.length > maxLength
-            ? `${formatted.slice(
-                0,
-                maxLength
-              )}\n-- Output truncated`
+            ? `${formatted.slice(0, maxLength)}\n-- Output truncated`
             : formatted;
 
         await interaction.editReply(
@@ -252,10 +231,6 @@ module.exports = {
 
       return;
     }
-
-    // ==========================================
-    // LUNAE
-    // ==========================================
 
     if (subcommand === "interactlunae") {
       await interaction.reply(
