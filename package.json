@@ -1,7 +1,7 @@
 {
   "name": "deorbit",
   "version": "1.0.0",
-  "description": "Deorbit - Lua code analysis and readability assistant",
+  "description": "Deorbit AI - Lua code analysis assistant",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js"
