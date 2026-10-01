@@ -4,6 +4,7 @@ const {
   suggestNames,
   formatRenameSuggestions,
 } = require("../rename");
+const { formatLua } = require("../formatter");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,6 +25,30 @@ module.exports = {
 
     .addSubcommand((subcommand) =>
       subcommand
+        .setName("rename")
+        .setDescription("Suggest readable Lua names")
+        .addStringOption((option) =>
+          option
+            .setName("code")
+            .setDescription("Lua code to analyze")
+            .setRequired(true)
+        )
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("format")
+        .setDescription("Format readable Lua code")
+        .addStringOption((option) =>
+          option
+            .setName("code")
+            .setDescription("Lua code to format")
+            .setRequired(true)
+        )
+    )
+
+    .addSubcommand((subcommand) =>
+      subcommand
         .setName("interactlunae")
         .setDescription("Interact with Lunae")
         .addStringOption((option) =>
@@ -38,18 +63,6 @@ module.exports = {
       subcommand
         .setName("help")
         .setDescription("Show Deorbit commands")
-    )
-
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("rename")
-        .setDescription("Suggest readable Lua names")
-        .addStringOption((option) =>
-          option
-            .setName("code")
-            .setDescription("Lua code to analyze")
-            .setRequired(true)
-        )
     ),
 
   async execute(interaction) {
@@ -62,6 +75,7 @@ module.exports = {
           "",
           "`/deorbit deobf` — Analyze Lua code",
           "`/deorbit rename` — Suggest readable names",
+          "`/deorbit format` — Format Lua code",
           "`/deorbit interactlunae` — Interact with Lunae",
           "`/deorbit help` — Show this help",
         ].join("\n")
@@ -135,6 +149,40 @@ module.exports = {
 
         await interaction.editReply(
           `❌ Rename analysis failed: ${error.message}`
+        );
+      }
+
+      return;
+    }
+
+    if (subcommand === "format") {
+      const code = interaction.options.getString("code");
+
+      await interaction.deferReply();
+
+      try {
+        const formatted = formatLua(code);
+
+        const maxLength = 1800;
+        const output =
+          formatted.length > maxLength
+            ? `${formatted.slice(0, maxLength)}\n-- Output truncated`
+            : formatted;
+
+        await interaction.editReply(
+          [
+            "🌑 **Deorbit Lua Formatter**",
+            "",
+            "```lua",
+            output,
+            "```",
+          ].join("\n")
+        );
+      } catch (error) {
+        console.error(error);
+
+        await interaction.editReply(
+          `❌ Formatting failed: ${error.message}`
         );
       }
 
