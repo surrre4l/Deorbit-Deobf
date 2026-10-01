@@ -19,6 +19,11 @@ const {
   formatDiagnostics,
 } = require("../diagnostics");
 
+const {
+  calculateMetrics,
+  formatMetrics,
+} = require("../metrics");
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("deorbit")
@@ -113,10 +118,16 @@ module.exports = {
       try {
         const result = analyzeLua(code);
         const diagnostics = diagnoseLua(code);
+        const metrics = calculateMetrics(code);
 
-        const analysisOutput = formatAnalysis(result);
+        const analysisOutput =
+          formatAnalysis(result);
+
         const diagnosticOutput =
           formatDiagnostics(diagnostics);
+
+        const metricsOutput =
+          formatMetrics(metrics);
 
         await interaction.editReply(
           [
@@ -130,6 +141,11 @@ module.exports = {
             "**Diagnostics**",
             "```text",
             diagnosticOutput,
+            "```",
+            "",
+            "**Metrics**",
+            "```text",
+            metricsOutput,
             "```",
             "",
             `**Functions:** ${
@@ -169,6 +185,7 @@ module.exports = {
 
       try {
         const suggestions = suggestNames(code);
+
         const output =
           formatRenameSuggestions(suggestions);
 
