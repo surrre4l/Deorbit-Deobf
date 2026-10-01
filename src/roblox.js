@@ -61,7 +61,7 @@ function analyzeRoblox(code) {
       name: "Remote Function Invocation",
     },
     {
-      pattern /FindFirstChild\s*\(/,
+      pattern: /FindFirstChild\s*\(/,
       name: "Instance Child Lookup",
     },
   ];
