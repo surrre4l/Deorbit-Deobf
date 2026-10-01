@@ -1,9 +1,11 @@
 const { SlashCommandBuilder } = require("discord.js");
+const { analyzeLua, formatAnalysis } = require("../analyzer");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("deorbit")
-    .setDescription("Deorbit AI tools")
+    .setDescription("Deorbit AI Lua analysis tools")
+
     .addSubcommand((subcommand) =>
       subcommand
         .setName("deobf")
@@ -15,6 +17,7 @@ module.exports = {
             .setRequired(true)
         )
     )
+
     .addSubcommand((subcommand) =>
       subcommand
         .setName("interactlunae")
@@ -26,11 +29,13 @@ module.exports = {
             .setRequired(true)
         )
     )
+
     .addSubcommand((subcommand) =>
       subcommand
         .setName("help")
-        .setDescription("Show Deorbit help")
+        .setDescription("Show Deorbit commands")
     )
+
     .addSubcommand((subcommand) =>
       subcommand
         .setName("rename")
@@ -44,33 +49,74 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const command = interaction.options.getSubcommand();
+    const subcommand = interaction.options.getSubcommand();
 
-    if (command === "help") {
-      return interaction.reply(
-        "🌑 **Deorbit AI**\n\n" +
-        "`/deorbit deobf` — Analyze authorized Lua code\n" +
-        "`/deorbit interactlunae` — Interact with Lunae\n" +
-        "`/deorbit help` — Show help\n" +
-        "`/deorbit rename` — Suggest readable names"
+    if (subcommand === "help") {
+      await interaction.reply(
+        [
+          "🌑 **Deorbit AI**",
+          "",
+          "`/deorbit deobf` — Analyze Lua code",
+          "`/deorbit rename` — Suggest readable names",
+          "`/deorbit interactlunae` — Interact with Lunae",
+          "`/deorbit help` — Show this help",
+        ].join("\n")
       );
+      return;
     }
 
-    if (command === "deobf") {
-      return interaction.reply(
-        "🌑 Deorbit's deobfuscation engine is not connected yet."
-      );
+    if (subcommand === "deobf") {
+      const code = interaction.options.getString("code");
+
+      await interaction.deferReply();
+
+      try {
+        const result = analyzeLua(code);
+
+        const output = formatAnalysis(result);
+
+        await interaction.editReply(
+          [
+            "🌑 **Deorbit Analysis**",
+            "",
+            "```text",
+            output,
+            "```",
+            "",
+            `**Functions:** ${
+              result.functions.length
+                ? result.functions.join(", ")
+                : "None detected"
+            }`,
+            "",
+            `**Services:** ${
+              result.services.length
+                ? result.services.join(", ")
+                : "None detected"
+            }`,
+          ].join("\n")
+        );
+      } catch (error) {
+        console.error(error);
+
+        await interaction.editReply(
+          `❌ Analysis failed: ${error.message}`
+        );
+      }
+
+      return;
     }
 
-    if (command === "interactlunae") {
-      return interaction.reply(
-        "🌙 Lunae integration is not connected yet."
+    if (subcommand === "rename") {
+      await interaction.reply(
+        "🌑 The rename engine will be connected next."
       );
+      return;
     }
 
-    if (command === "rename") {
-      return interaction.reply(
-        "🌑 Deorbit's rename engine is not connected yet."
+    if (subcommand === "interactlunae") {
+      await interaction.reply(
+        "🌙 Lunae integration will be connected next."
       );
     }
   },
