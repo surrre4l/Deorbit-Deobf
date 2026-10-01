@@ -29,6 +29,11 @@ const {
   formatTokenAnalysis,
 } = require("../tokens");
 
+const {
+  analyzeControlFlow,
+  formatControlFlow,
+} = require("../controlflow");
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("deorbit")
@@ -117,6 +122,7 @@ module.exports = {
         const diagnostics = diagnoseLua(code);
         const metrics = calculateMetrics(code);
         const tokens = analyzeTokens(code);
+        const controlFlow = analyzeControlFlow(code);
 
         await interaction.editReply(
           [
@@ -140,6 +146,11 @@ module.exports = {
             "**Tokens**",
             "```text",
             formatTokenAnalysis(tokens),
+            "```",
+            "",
+            "**Control Flow**",
+            "```text",
+            formatControlFlow(controlFlow),
             "```",
             "",
             `**Functions:** ${
