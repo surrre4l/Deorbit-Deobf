@@ -1,20 +1,12 @@
 function diagnoseLua(code) {
   if (typeof code !== "string" || !code.trim()) {
-    throw new Error("Lua code is required.");
+    throw new Error("Lua source is required.");
   }
 
   const lines = code.split(/\r?\n/);
-  const issues = [];
+  const diagnostics = [];
 
-  let blockDepth = 0;
-
-  const addIssue = (line, type, message) => {
-    issues.push({
-      line,
-      type,
-      message,
-    });
-  };
+  let openBlocks = 0;
 
   lines.forEach((rawLine, index) => {
     const lineNumber = index + 1;
@@ -24,138 +16,84 @@ function diagnoseLua(code) {
       return;
     }
 
-    // Basic block tracking
-    const openMatches =
-      line.match(/\b(function|if|for|while|do|repeat)\b/g) || [];
+    const strings = line.match(/(["'])(?:\\.|(?!\1).)*\1/g) || [];
 
-    const closeMatches =
-      line.match(/\bend\b/g) || [];
+    let cleaned = line;
 
-    blockDepth += openMatches.length;
-    blockDepth -= closeMatches.length;
-
-    if (blockDepth < 0) {
-      addIssue(
-        lineNumber,
-        "block",
-        "Unexpected 'end'."
-      );
-
-      blockDepth = 0;
+    for (const string of strings) {
+      cleaned = cleaned.replace(string, "");
     }
 
-    // if statement checks
+    const opens =
+      cleaned.match(
+        /\b(function|then|do|repeat)\b/g
+      ) || [];
+
+    const closes =
+      cleaned.match(
+        /\b(end|until)\b/g
+      ) || [];
+
+    openBlocks += opens.length;
+    openBlocks -= closes.length;
+
+    if (openBlocks < 0) {
+      diagnostics.push({
+        line: lineNumber,
+        type: "error",
+        message: "Unexpected block terminator.",
+      });
+
+      openBlocks = 0;
+    }
+
     if (
-      /\bif\b/.test(line) &&
-      !/\bthen\b/.test(line) &&
-      !line.includes("--")
+      /\bif\b/.test(cleaned) &&
+      !/\bthen\b/.test(cleaned)
     ) {
-      addIssue(
-        lineNumber,
-        "syntax",
-        "An if statement may be missing 'then'."
-      );
+      diagnostics.push({
+        line: lineNumber,
+        type: "warning",
+        message: "Possible missing 'then'.",
+      });
     }
 
-    // elseif checks
     if (
-      /\belseif\b/.test(line) &&
-      !/\bthen\b/.test(line)
+      /\blocal\s*$/.test(cleaned)
     ) {
-      addIssue(
-        lineNumber,
-        "syntax",
-        "An elseif statement may be missing 'then'."
-      );
-    }
-
-    // Function declaration checks
-    if (
-      /^function\s+[A-Za-z_][A-Za-z0-9_.:]*\s*\([^)]*\)\s*$/.test(line)
-    ) {
-      addIssue(
-        lineNumber,
-        "syntax",
-        "Function declaration has no visible body."
-      );
-    }
-
-    // Empty local declaration
-    if (
-      /^local\s+[A-Za-z_][A-Za-z0-9_]*\s*$/.test(line)
-    ) {
-      addIssue(
-        lineNumber,
-        "style",
-        "Local variable is declared without an assignment."
-      );
-    }
-
-    // Assignment to obvious Lua keywords
-    if (
-      /^(end|then|else|elseif|return|local|function|while|for|repeat)\s*=/.test(
-        line
-      )
-    ) {
-      addIssue(
-        lineNumber,
-        "syntax",
-        "A Lua keyword appears to be used as an assignment target."
-      );
-    }
-
-    // Empty function call
-    if (
-      /\b[A-Za-z_][A-Za-z0-9_.:]*\(\s*\)\s*$/.test(line) &&
-      !line.startsWith("function")
-    ) {
-      addIssue(
-        lineNumber,
-        "info",
-        "Function call has no arguments; verify that this is intentional."
-      );
-    }
-
-    // Suspicious loadstring usage
-    if (/\bloadstring\s*\(/.test(line)) {
-      addIssue(
-        lineNumber,
-        "dynamic",
-        "Dynamic Lua loading detected; inspect the source before execution."
-      );
-    }
-
-    // Deprecated Roblox API pattern
-    if (/\bwait\s*\(/.test(line)) {
-      addIssue(
-        lineNumber,
-        "roblox",
-        "Legacy wait() usage detected; task.wait() may be preferable."
-      );
+      diagnostics.push({
+        line: lineNumber,
+        type: "warning",
+        message: "Incomplete local declaration.",
+      });
     }
   });
 
-  if (blockDepth > 0) {
-    addIssue(
-      lines.length,
-      "block",
-      `${blockDepth} block(s) may be missing 'end'.`
-    );
+  if (openBlocks > 0) {
+    diagnostics.push({
+      line: lines.length,
+      type: "warning",
+      message: `Possible missing 'end' or 'until' for ${openBlocks} open block(s).`,
+    });
   }
 
-  return issues;
+  return diagnostics;
 }
 
-function formatDiagnostics(issues) {
-  if (!issues.length) {
-    return "No obvious issues detected.";
+function formatDiagnostics(diagnostics) {
+  if (!diagnostics.length) {
+    return "No obvious syntax issues detected.";
   }
 
-  return issues
-    .map(
-      (issue) =>
-        `Line ${issue.line} [${issue.type}] ${issue.message}`
-    )
+  return diagnostics
+    .map((item) => {
+      const prefix =
+        item.type === "error"
+          ? "ERROR"
+          : "WARNING";
+
+      return `${prefix} [Line ${item.line}]: ${item.message}`;
+    })
     .join("\n");
 }
 
