@@ -1,10 +1,23 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { analyzeLua, formatAnalysis } = require("../analyzer");
+
+const {
+  analyzeLua,
+  formatAnalysis,
+} = require("../analyzer");
+
 const {
   suggestNames,
   formatRenameSuggestions,
 } = require("../rename");
-const { formatLua } = require("../formatter");
+
+const {
+  formatLua,
+} = require("../formatter");
+
+const {
+  diagnoseLua,
+  formatDiagnostics,
+} = require("../diagnostics");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -68,6 +81,10 @@ module.exports = {
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
+    // ==========================================
+    // HELP
+    // ==========================================
+
     if (subcommand === "help") {
       await interaction.reply(
         [
@@ -80,8 +97,13 @@ module.exports = {
           "`/deorbit help` — Show this help",
         ].join("\n")
       );
+
       return;
     }
+
+    // ==========================================
+    // DEOBF / ANALYSIS
+    // ==========================================
 
     if (subcommand === "deobf") {
       const code = interaction.options.getString("code");
@@ -90,14 +112,24 @@ module.exports = {
 
       try {
         const result = analyzeLua(code);
-        const output = formatAnalysis(result);
+        const diagnostics = diagnoseLua(code);
+
+        const analysisOutput = formatAnalysis(result);
+        const diagnosticOutput =
+          formatDiagnostics(diagnostics);
 
         await interaction.editReply(
           [
             "🌑 **Deorbit Analysis**",
             "",
+            "**Structure**",
             "```text",
-            output,
+            analysisOutput,
+            "```",
+            "",
+            "**Diagnostics**",
+            "```text",
+            diagnosticOutput,
             "```",
             "",
             `**Functions:** ${
@@ -111,6 +143,8 @@ module.exports = {
                 ? result.services.join(", ")
                 : "None detected"
             }`,
+            "",
+            `**Issues:** ${diagnostics.length}`,
           ].join("\n")
         );
       } catch (error) {
@@ -124,6 +158,10 @@ module.exports = {
       return;
     }
 
+    // ==========================================
+    // RENAME
+    // ==========================================
+
     if (subcommand === "rename") {
       const code = interaction.options.getString("code");
 
@@ -131,7 +169,8 @@ module.exports = {
 
       try {
         const suggestions = suggestNames(code);
-        const output = formatRenameSuggestions(suggestions);
+        const output =
+          formatRenameSuggestions(suggestions);
 
         await interaction.editReply(
           [
@@ -155,6 +194,10 @@ module.exports = {
       return;
     }
 
+    // ==========================================
+    // FORMAT
+    // ==========================================
+
     if (subcommand === "format") {
       const code = interaction.options.getString("code");
 
@@ -164,9 +207,13 @@ module.exports = {
         const formatted = formatLua(code);
 
         const maxLength = 1800;
+
         const output =
           formatted.length > maxLength
-            ? `${formatted.slice(0, maxLength)}\n-- Output truncated`
+            ? `${formatted.slice(
+                0,
+                maxLength
+              )}\n-- Output truncated`
             : formatted;
 
         await interaction.editReply(
@@ -189,10 +236,16 @@ module.exports = {
       return;
     }
 
+    // ==========================================
+    // LUNAE
+    // ==========================================
+
     if (subcommand === "interactlunae") {
       await interaction.reply(
         "🌙 Lunae integration will be connected next."
       );
+
+      return;
     }
   },
 };
